@@ -12,16 +12,17 @@ class LineMap {
     init() {
       this.provinceInfo = document.getElementById('provinceInfo');
       // 渲染器
-      this.renderer = new THREE.WebGLRenderer();
+      this.renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas') });
       this.renderer.setSize(window.innerWidth, window.innerHeight);
-      this.container.appendChild(this.renderer.domElement);
+      // this.container.appendChild(this.renderer.domElement);
 
       // 场景
       this.scene = new THREE.Scene();
+      this.scene.add(new THREE.AxesHelper(100));
 
       // 相机 透视相机
       this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-      this.camera.position.set(0, -70, 150);
+      this.camera.position.set(0, 0, 150);
       this.camera.lookAt(0, 0, 0);
 
       this.setController(); // 设置控制
@@ -61,29 +62,29 @@ class LineMap {
     }
 
     loadFont() { //加载中文字体
-      var loader = new THREE.FontLoader();
-      var _this = this;
+      const loader = new THREE.FontLoader();
+      const _this = this;
       loader.load('fonts/chinese.json', function (response) {
         _this.font = response;
         _this.loadMapData();
       });
-
     }
 
     createText(text, position) {
-      var shapes = this.font.generateShapes(text, 1);
+      const shapes = this.font.generateShapes(text, 1);
 
-      var geometry = new THREE.ShapeBufferGeometry(shapes);
+      const geometry = new THREE.ShapeBufferGeometry(shapes);
 
-      var material = new THREE.MeshBasicMaterial();
+      const material = new THREE.MeshBasicMaterial();
 
-      var textMesh = new THREE.Mesh(geometry, material);
+      const textMesh = new THREE.Mesh(geometry, material);
       textMesh.position.set(position.x, position.y, position.z);
 
       this.scene.add(textMesh);
     }
 
     initMap(chinaJson) {
+      // https://zhuanlan.zhihu.com/p/109555689
       // 建一个空对象存放对象
       this.map = new THREE.Object3D();
 
@@ -97,15 +98,46 @@ class LineMap {
         const province = new THREE.Object3D();
         // 每个的 坐标 数组
         const coordinates = elem.geometry.coordinates;
+        if (elem.properties.name === "内蒙古自治区") {
+          const width = 4, height = 100, width_segments =1, height_segments = coordinates[0][0].length;
+          const plane = new THREE.PlaneGeometry(width, height, width_segments, height_segments);
+
+          const positions = plane.attributes.position.array;
+          for (let i = 0; i <= coordinates[0][0].length; i++) {
+            const point = coordinates[0][0][i < coordinates[0][0].length ? i : 0];
+            const [x, y] = projection(point);
+            positions[2*i*3] -= 2;
+            positions[(2*i+1)*3] -= 2;
+            positions[2*i*3+2] = x;
+            positions[(2*i+1)*3+2] = x;
+            positions[2*i*3+1] = -y;
+            positions[(2*i+1)*3+1] = -y;
+          }
+
+          const mesh = new THREE.Mesh(plane, new THREE.MeshLambertMaterial({
+            color: 0xffffff,
+            // transparent: true,
+            // opacity: 0.6,
+            side: THREE.DoubleSide
+          }));
+          const wire = new THREE.LineSegments(new THREE.WireframeGeometry(mesh.geometry), new THREE.LineBasicMaterial({
+            color: "black"
+          }));
+          mesh.add(wire);
+
+          mesh.translateZ(10);
+          mesh.rotation.y = Math.PI/2;
+
+          province.add(mesh);
+        }
         // 循环坐标数组
         coordinates.forEach(multiPolygon => {
-
           multiPolygon.forEach(polygon => {
             const shape = new THREE.Shape();
             const lineMaterial = new THREE.LineBasicMaterial({
               color: 'white'
             });
-            
+
             const points = [];
 
             for (let i = 0; i < polygon.length; i++) {
@@ -117,7 +149,7 @@ class LineMap {
               points.push(new THREE.Vector3(x, -y, 4.01));
             }
 
-            const lineGeometry = new THREE.BufferGeometry().setFromPoints( points );
+            const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
 
             const extrudeSettings = {
               depth: 4,
@@ -140,10 +172,8 @@ class LineMap {
             const mesh = new THREE.Mesh(geometry, [material, material1]);
             const line = new THREE.Line(lineGeometry, lineMaterial);
             province.add(mesh);
-            province.add(line)
-
+            province.add(line);
           })
-
         })
 
         // 将geo的属性放到省份模型中
@@ -154,20 +184,91 @@ class LineMap {
         }
 
         _this.map.add(province);
-
       })
 
       this.scene.add(this.map);
+
+      // https://blog.csdn.net/linziping/article/details/106426624
+      const width = 100, height = 100, width_segments =1, height_segments = 100;
+      let plane = new THREE.PlaneGeometry(width, height, width_segments, height_segments);
+      
+      // const positions = plane.attributes.position.array
+      // for(let i=0; i<positions.length/2; i++) {
+      //     positions[2*i] = Math.pow(2, i/20);
+      //     positions[2*i+1] = Math.pow(2, i/20);
+      // }
+      const positions = plane.attributes.position.array
+      for(let i=0; i<positions.length/(3 * 2); i++) {
+          positions[2*i*3+2] = Math.pow(2, i/20);
+          positions[(2*i+1)*3+2] = Math.pow(2, i/20);
+      }
+
+      const mesh = new THREE.Mesh(plane, new THREE.MeshLambertMaterial({
+        color: 0x888888,
+        transparent: true,
+        opacity: 0.6,
+        side: THREE.DoubleSide
+      }));
+      let wire = new THREE.LineSegments(new THREE.WireframeGeometry(mesh.geometry), new THREE.LineBasicMaterial({
+        color: "black"
+      }));
+
+      mesh.rotation.y = Math.PI/2-0.5;
+      mesh.add(wire);
+      this.scene.add(mesh);
+
+      // parametric geometry
+      const planeFunc = function (u, v, vector3) {
+        const x = u * 50;
+        const y = 0;
+        const z = v * 50;
+        // return vector3.set(-100 + 200 * u, -100 + 200 * v, 3 * Math.sin(20 * (u + v)));
+        return vector3.set(x, y, z);
+      }
+      const geometry = new THREE.ParametricGeometry( planeFunc, 25, 10 );
+      const material = new THREE.MeshBasicMaterial( { color: 0x00ff00, side: THREE.DoubleSide } );
+      const klein = new THREE.Mesh( geometry, material );
+      wire = new THREE.LineSegments(new THREE.WireframeGeometry(klein.geometry));
+      klein.add(wire);
+      this.scene.add(klein);
+
+    // const extrudeSettings = {
+    //     amount : 2,
+    //     steps : 1,
+    //     bevelEnabled: false,
+    //     curveSegments: 8
+    // };
+
+    // const arcShape = new THREE.Shape();
+    // arcShape.absarc(0, 0, 1, 0, Math.PI * 2, 0, false);
+
+    // const holePath = new THREE.Path();
+    // holePath.absarc(0, 0, 0.8, 0, Math.PI * 2, true);
+    // arcShape.holes.push(holePath);
+
+    // const geometry = new THREE.ExtrudeGeometry(arcShape, extrudeSettings);
+
+    // const edges = new THREE.EdgesGeometry( geometry );
+    // const line = new THREE.LineSegments( edges, new THREE.LineBasicMaterial( { color: 0xffffff } ) );
+
+    // const material = new THREE.MeshBasicMaterial({
+    //   color: '#02A1E2',
+    //   transparent: true,
+    //   opacity: 0.6
+    // });
+    // const mesh = new THREE.Mesh(geometry, material);
+
+    // this.scene.add(mesh);
+    // this.scene.add(line);
     }
 
     setRaycaster() {
       this.raycaster = new THREE.Raycaster();
       this.mouse = new THREE.Vector2();
       this.eventOffset = {};
-      var _this = this;
+      const _this = this;
 
       function onMouseMove(event) {
-
         // calculate mouse position in normalized device coordinates
         // (-1 to +1) for both components
 
@@ -198,7 +299,6 @@ class LineMap {
 
       /* this.controller.minZoom = 0.5; // 最小缩放 适用于OrthographicCamera
       this.controller.maxZoom = 2; // 最大缩放 */
-
     }
 
     animate() {
@@ -208,7 +308,7 @@ class LineMap {
       this.raycaster.setFromCamera(this.mouse, this.camera);
 
       // calculate objects intersecting the picking ray
-      var intersects = this.raycaster.intersectObjects(this.scene.children, true);
+      const intersects = this.raycaster.intersectObjects(this.scene.children, true);
       if (this.activeInstersect && this.activeInstersect.length > 0) { // 将上一次选中的恢复颜色
         this.activeInstersect.forEach(element => {
           element.object.material[0].color.set('#02A1E2');
@@ -218,7 +318,7 @@ class LineMap {
 
       this.activeInstersect = []; // 设置为空
 
-      for (var i = 0; i < intersects.length; i++) {
+      for (let i = 0; i < intersects.length; i++) {
         if (intersects[i].object.material && intersects[i].object.material.length === 2) {
           this.activeInstersect.push(intersects[i]);
           intersects[i].object.material[0].color.set(0xff0000);
@@ -233,7 +333,7 @@ class LineMap {
 
     createProvinceInfo() { // 显示省份的信息      
       if (this.activeInstersect.length !== 0 && this.activeInstersect[0].object.parent.properties.name) {
-        var properties = this.activeInstersect[0].object.parent.properties;
+        const properties = this.activeInstersect[0].object.parent.properties;
 
         this.provinceInfo.textContent = properties.name;
 
