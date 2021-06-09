@@ -1,21 +1,24 @@
 <template>
   <div id="app">
-    <canvas id="canvas"></canvas>
-    <div id="provinceInfo"></div>
+    <pollution-map></pollution-map>
   </div>
 </template>
 
 <script>
-import LineMap from "./assets/js/LineMap.js"
+// import LineMap from "./assets/js/LineMap.js"
+import PollutionMap from "@/PollutionMap.vue";
 
 export default {
   name: 'App',
+  components: {
+    PollutionMap
+  },
   methods:{
     
   },
   mounted(){
-    const line = new LineMap();
-    line.init();
+    // const line = new LineMap();
+    // line.init();
   }
 }
 </script>
@@ -37,18 +40,5 @@ body {
   margin: 0;
   padding: 0;
   overflow: hidden;
-}
-
-#canvas {
-  width: 100%;
-  height: 100%;
-}
-
-#provinceInfo {
-  position: absolute;
-  z-index: 2;
-  background: white;
-  padding: 10px;
-  visibility: hidden;
 }
 </style>
