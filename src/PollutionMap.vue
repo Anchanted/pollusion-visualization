@@ -107,6 +107,9 @@ export default {
           return `${levelList[index - 1]} - ${levelList[index]}`
         }
       }
+    },
+    originIndex() {
+      return this.currentdateList ? Math.floor(this.currentdateList.length / 2) : 0
     }
   },
   methods: {
@@ -169,7 +172,7 @@ export default {
 
             const mesh = new THREE.Mesh(geometry, material);
             const line = new THREE.Line(lineGeometry, lineMaterial);
-            line.position.z = this.normalDepth;
+
             province.add(mesh);
             province.add(line);
           })
@@ -325,6 +328,21 @@ export default {
         });
       });
     },
+    updateMapPos() {
+      let currentDateIndex = this.currentdateList.findIndex(e => e === this.currentDate); 
+      this.map.children.forEach(province => {
+        province.visible = true;
+        province.userData.gray = false;
+        province.children.forEach(obj => {
+          if (obj instanceof THREE.Mesh) {
+            obj.scale.z = this.stretched ? this.currentdateList.length : 1;
+            obj.position.z = this.stretched ? (0 - this.originIndex) * this.normalDepth : (currentDateIndex - this.originIndex) * this.normalDepth;
+          } else if (obj instanceof THREE.Line) {
+            obj.position.z = this.stretched ? (this.currentdateList.length - this.originIndex) * this.normalDepth : (currentDateIndex - this.originIndex + 1) * this.normalDepth;
+          }
+        });
+      });
+    },
     createDateGroup() {
       if (this.dateGroup) {
         this.disposeDateGroup();
@@ -334,7 +352,6 @@ export default {
       if (!provinceData) return;
 
       const dateGroup = new THREE.Object3D();
-      let currentDateIndex = this.currentdateList.findIndex(e => e === this.currentDate); 
 
       this.currentdateList.forEach((date, i) => {
         const province = new THREE.Object3D();
@@ -372,7 +389,7 @@ export default {
             opacity: 0.6
           });
           const mesh = new THREE.Mesh(object.geometry, material);
-          mesh.position.z = (i - currentDateIndex) * this.normalDepth;
+          mesh.position.z = (i - this.originIndex) * this.normalDepth;
           province.add(mesh);
         });
         dateGroup.add(province);
@@ -408,10 +425,10 @@ export default {
     // this.container.appendChild(this.renderer.domElement);
 
     // 场景
-    // this.scene.add(new THREE.AxesHelper(100));
+    this.scene.add(new THREE.AxesHelper(100));
 
     // 相机 透视相机
-    this.camera.position.set(0, 0, 500);
+    this.camera.position.set(0, 0, 300);
     this.camera.lookAt(0, 0, 0);
 
     this.initMap();
@@ -497,6 +514,7 @@ export default {
           });
         }
       });
+      this.updateMapPos();
       this.updateMapColor(this.map);
       if (this.dateGroup) {
         this.disposeDateGroup();
@@ -524,20 +542,7 @@ export default {
       this.currentDate = this.currentdateList[dateIndex] || this.currentdateList[0];
     },
     stretched(val) {
-      let currentDateIndex = this.currentdateList.findIndex(e => e === this.currentDate); 
-
-      this.map.children.forEach(province => {
-        province.visible = true;
-        province.userData.gray = false;
-        province.children.forEach(obj => {
-          if (obj instanceof THREE.Mesh) {
-            obj.scale.z = val ? this.currentdateList.length : 1;
-            obj.position.z = val ? -currentDateIndex * this.normalDepth : 0;
-          } if (obj instanceof THREE.Line) {
-            obj.position.z = val ? (this.currentdateList.length - currentDateIndex) * this.normalDepth : this.normalDepth;
-          }
-        });
-      });
+      this.updateMapPos();
       this.updateMapColor(this.map);
 
       if (val) {
