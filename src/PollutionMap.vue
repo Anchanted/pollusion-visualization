@@ -10,6 +10,12 @@
       {{hoveredProvince && hoveredProvince.name}}<br>
       {{currentPollution}}: {{hoveredProvince && hoveredProvince.userData[currentPollution]}}
     </div>
+    <div v-show="currentPollution" id="color-bar">
+      <div v-for="(color, index) in levelColorArr" :key="index" class="color-bar-row">
+        <span class="color-area" :style="{ backgroundColor: color }"></span>
+        <span class="color-text">{{levelText(index)}}</span>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -82,6 +88,21 @@ export default {
         "NO2": [40, 80, 180, 280, 400],
         "CO": [1, 2, 10, 17, 34],
         "O3": [50, 100, 168, 208, 748],
+      }
+    }
+  },
+  computed: {
+    levelText() {
+      return index => {
+        if (!this.currentPollution) return "";
+        const levelList = this.pollutionLevel[this.currentPollution];
+        if (index === 0) {
+          return `0 - ${levelList[index]}`
+        } else if (index === levelList.length) {
+          return `${levelList[index - 1]} +`
+        } else {
+          return `${levelList[index - 1]} - ${levelList[index]}`
+        }
       }
     }
   },
@@ -310,8 +331,8 @@ export default {
       let province = intersects.filter(obj => obj.object instanceof THREE.Mesh && obj.object.parent?.visible)[0]?.object.parent;
       if (!province?.name) return;
       if (this.selectedProvince && province?.userData.date) {
-        this.currentDate = province?.userData.date;
         this.selectedProvince = null;
+        this.currentDate = province?.userData.date;
       } else if (!this.selectedProvince) {
         if (province && province.name === lastProvince?.name) {
           province = null;
@@ -589,6 +610,10 @@ export default {
         }
       });
       this.updateMapColor(this.map);
+      if (this.dateGroup) {
+        this.disposeDateGroup();
+        this.createDateGroup();
+      }
     },
     currentPollution(val) {
       this.updateMapColor(this.map);
@@ -596,13 +621,17 @@ export default {
         this.updateMapColor(this.dateGroup);
       }
     },
-    currentYear(val) {
+    currentYear(val, oldVal) {
       const yearObj = this.yearArr.find(e => e.year === val);
       if (!yearObj) return;
       this.currentdateList = yearObj.dateList;
       this.currentprovincedate = yearObj.provincedate;
-      this.currentDate = this.currentdateList[0];
-      this.updateMapColor(this.map);
+  
+      let dateIndex = -1;
+      if (this.currentDate) {
+        dateIndex = this.currentdateList.findIndex(e => e.substr(4) === this.currentDate.substr(4));
+      }
+      this.currentDate = this.currentdateList[dateIndex] || this.currentdateList[0];
     }
   }
 }
@@ -622,5 +651,40 @@ export default {
   pointer-events: none;
   font-size: 12px;
   line-height: 1.5;
+}
+
+#color-bar {
+  position: absolute;
+  bottom: 10px;
+  right: 15px;
+  z-index: 2;
+  background: black;
+  padding: 6px;
+  pointer-events: none;
+  font-size: 12px;
+  line-height: 1.5;
+  border-radius: 2px;
+  
+  .color-bar-row {
+    height: 20px;
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: left;
+    align-items: center;
+
+    span {
+      display: inline-block;
+    }
+
+    .color-text {
+      color: #ffffff;
+      margin-right: 10px;
+    }
+
+    .color-area {
+      width: 30px;
+      height: 14px;
+    }
+  }
 }
 </style>
