@@ -16,7 +16,6 @@
         <span class="color-text">{{levelText(index)}}</span>
       </div>
     </div>
-    <button id="reset" @click="onclickreset">Reset</button>
   </div>
 </template>
 
@@ -42,10 +41,10 @@ export default {
       canvas: null,
       provinceInfo: null,
       renderer: null,
-      scene: new THREE.Scene(),
+      projection: d3.geoMercator().center([104.0, 37.5]).scale(80).translate([0, 0]),
+      scene:  new THREE.Scene(),
       camera: new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 5000),
       raycaster: new THREE.Raycaster(),
-      map: new THREE.Object3D(),
       dateGroup: undefined,
       mouse: new THREE.Vector2(),
       eventOffset: {
@@ -89,9 +88,7 @@ export default {
         "NO2": [40, 80, 180, 280, 400],
         "CO": [1, 2, 10, 17, 34],
         "O3": [50, 100, 168, 208, 748],
-      },
-      blue: "#02A1E2",
-      stretched: false
+      }
     }
   },
   computed: {
@@ -122,63 +119,6 @@ export default {
       this.renderer.render(this.scene, this.camera);
     },
     initMap() {
-      // 墨卡托投影转换
-      const projection = d3.geoMercator().center([104.0, 37.5]).scale(80).translate([0, 0]);
-
-      chinajson.features.forEach(geo => {
-        // 定一个省份3D对象
-        const province = new THREE.Object3D();
-        province.name = geo.properties.name || "";
-        province.userData.color = this.blue;
-
-        // 每个的 坐标 数组
-        const coordinates = geo.geometry.coordinates;
-
-        // 循环坐标数组
-        coordinates.forEach(multiPolygon => {
-          multiPolygon.forEach(polygon => {
-            const shape = new THREE.Shape();
-            const lineMaterial = new THREE.LineBasicMaterial({
-              color: 'white'
-            });
-
-            const points = [];
-
-            for (let i = 0; i < polygon.length; i++) {
-              const [x, y] = projection(polygon[i]);
-              if (i === 0) {
-                shape.moveTo(x, -y);
-              }
-              shape.lineTo(x, -y);
-              points.push(new THREE.Vector3(x, -y, 0));
-            }
-
-            const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
-
-            const extrudeSettings = {
-              depth: this.normalDepth,
-              bevelEnabled: false
-            };
-
-            const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-            const material = new THREE.MeshBasicMaterial({
-              color: province.userData.color,
-              transparent: true,
-              opacity: 0.6
-            });
-
-            const mesh = new THREE.Mesh(geometry, material);
-            const line = new THREE.Line(lineGeometry, lineMaterial);
-            line.position.z = this.normalDepth;
-            province.add(mesh);
-            province.add(line);
-          })
-        })
-
-        this.map.add(province);
-      });
-      this.scene.add(this.map);
-
       this.currentPollution = this.pollutionArr[0];
       this.currentYear = this.yearArr[0].year;
     },
@@ -226,37 +166,29 @@ export default {
       this.eventOffset.x = e.clientX + 2;
       this.eventOffset.y = e.clientY + 2;
 
-      this.raycaster.setFromCamera(this.mouse, this.camera);
+      // this.raycaster.setFromCamera(this.mouse, this.camera);
 
-      // calculate objects intersecting the picking ray
-      const intersects = this.raycaster.intersectObjects(this.scene.children, true);
-      if (this.hoveredProvince) { // 将上一次选中的恢复颜色
-        this.hoveredProvince.children.forEach(obj => {
-          if (obj instanceof THREE.Mesh) {
-            let color;
-            if (this.hoveredProvince.userData.gray) {
-              color = 0xeeeeee;
-            } else if (obj.scale.z !== 1) {
-              color = this.blue;
-            } else {
-              color = this.hoveredProvince.userData.color;
-            }
-            obj.material.color.set(color);
-          }
-        });
-      }
+      // // calculate objects intersecting the picking ray
+      // const intersects = this.raycaster.intersectObjects(this.scene.children, true);
+      // if (this.hoveredProvince) { // 将上一次选中的恢复颜色
+      //   this.hoveredProvince.children.forEach(obj => {
+      //     if (obj instanceof THREE.Mesh) {
+      //       obj.material.color.set(this.hoveredProvince.userData.color);
+      //     }
+      //   });
+      // }
 
-      const province = intersects.filter(obj => obj.object instanceof THREE.Mesh && obj.object.parent?.visible && obj.object.parent?.name)[0]?.object.parent;
-      if (province) {
-        province.children.forEach(e => {
-          if (e instanceof THREE.Mesh) {
-            e.material.color.set(0xff0000);
-          }
-        });
-      }
-      this.hoveredProvince = province;
+      // const province = intersects.filter(obj => obj.object instanceof THREE.Mesh && obj.object.parent?.visible && obj.object.parent?.name)[0]?.object.parent;
+      // if (province) {
+      //   province.children.forEach(e => {
+      //     if (e instanceof THREE.Mesh) {
+      //       e.material.color.set(0xff0000);
+      //     }
+      //   });
+      // }
+      // this.hoveredProvince = province;
 
-      this.createProvinceInfo();
+      // this.createProvinceInfo();
     },
     onmouseup(e) {
       if (this.moveMove) return;
@@ -267,7 +199,7 @@ export default {
       const lastProvince = this.selectedProvince;
       const intersects = this.raycaster.intersectObjects(this.scene.children, true);
       let province = intersects.filter(obj => obj.object instanceof THREE.Mesh && obj.object.parent?.visible)[0]?.object.parent;
-      if (!province?.name || province.userData.gray) return;
+      if (!province?.name) return;
       if (this.selectedProvince && province?.userData.date) {
         this.selectedProvince = null;
         this.currentDate = province?.userData.date;
@@ -305,22 +237,16 @@ export default {
             while (num > pollutionLevel[levelIndex] && levelIndex < pollutionLevel.length) {
               levelIndex++;
             }
-            province.userData.color = this.levelColorArr[levelIndex] || this.blue;
+            province.userData.color = this.levelColorArr[levelIndex] || '#02A1E2';
           } else {
-            province.userData.color = this.blue;
+            province.userData.color = '#02A1E2';
           }
         } else {
-          province.userData.color = this.blue;
+          province.userData.color = '#02A1E2';
         }
         province.children.forEach(obj => {
           if (obj instanceof THREE.Mesh) {
-            let color;
-            if (obj.scale.z !== 1) {
-              color = this.blue;
-            } else {
-              color = province.userData.color;
-            }
-            obj.material.color.set(color);
+            obj.material.color.set(province.userData.color);
           }
         });
       });
@@ -330,71 +256,111 @@ export default {
         this.disposeDateGroup();
       }
 
-      const provinceData = this.currentprovincedate.find(e => e.name === this.selectedProvince.name);
-      if (!provinceData) return;
-
       const dateGroup = new THREE.Object3D();
-      let currentDateIndex = this.currentdateList.findIndex(e => e === this.currentDate); 
-
+      const originIndex = Math.floor(this.currentdateList.length / 2);
       this.currentdateList.forEach((date, i) => {
-        const province = new THREE.Object3D();
-        province.name = provinceData.name;
-        const dateData = provinceData.data.find(e => e.date === date);
-        if (dateData) {
-          dateData.data.forEach((data, index) => {
-            province.userData[this.pollutionArr[index]] = data;
-          });
-        }
-        province.userData.date = date;
-        province.userData.color = this.blue;
+        const map = new THREE.Object3D;
+        map.name = date;
+        chinajson.features.forEach(geo => {
+          // 定一个省份3D对象
+          const province = new THREE.Object3D();
+          province.name = geo.properties.name || "";
 
-        const pollutionLevel = this.pollutionLevel[this.currentPollution];
-        if (pollutionLevel) {
-          const num = province.userData[this.currentPollution]
-          if (num != null) {
-            let levelIndex = 0;
-            while (num > pollutionLevel[levelIndex] && levelIndex < pollutionLevel.length) {
-              levelIndex++;
-            }
-            province.userData.color = this.levelColorArr[levelIndex] || this.blue;
-          } else {
-            province.userData.color = this.blue;
+          const provinceData = this.currentprovincedate.find(e => e.name === province.name);
+          const dateData = provinceData?.data.find(e => e.date === date);
+          if (dateData) {
+            dateData.data.forEach((data, index) => {
+              province.userData[this.pollutionArr[index]] = data;
+            });
           }
-        } else {
-          province.userData.color = this.blue;
-        }
+          province.userData.date = date;
+          province.userData.color = '#02A1E2';
 
-        this.selectedProvince.children.forEach(object => {
-          if (!object instanceof THREE.Mesh) return;
-          const material = new THREE.MeshBasicMaterial({
-            color: province.userData.color,
-            transparent: true,
-            opacity: 0.6
-          });
-          const mesh = new THREE.Mesh(object.geometry, material);
-          mesh.position.z = (i - currentDateIndex) * this.normalDepth;
-          province.add(mesh);
+          const pollutionLevel = this.pollutionLevel[this.currentPollution];
+          if (pollutionLevel) {
+            const num = province.userData[this.currentPollution]
+            if (num != null) {
+              let levelIndex = 0;
+              while (num > pollutionLevel[levelIndex] && levelIndex < pollutionLevel.length) {
+                levelIndex++;
+              }
+              province.userData.color = this.levelColorArr[levelIndex] || '#02A1E2';
+            } else {
+              province.userData.color = '#02A1E2';
+            }
+          } else {
+            province.userData.color = '#02A1E2';
+          }
+
+          // 每个的 坐标 数组
+          const coordinates = geo.geometry.coordinates;
+
+          // 循环坐标数组
+          coordinates.forEach(multiPolygon => {
+            multiPolygon.forEach(polygon => {
+              const shape = new THREE.Shape();
+              const lineMaterial = new THREE.LineBasicMaterial({
+                color: 'white'
+              });
+
+              const points = [];
+
+              for (let i = 0; i < polygon.length; i++) {
+                const [x, y] = this.projection(polygon[i]);
+                if (i === 0) {
+                  shape.moveTo(x, -y);
+                }
+                shape.lineTo(x, -y);
+                points.push(new THREE.Vector3(x, -y, 0));
+              }
+
+              const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+
+              const extrudeSettings = {
+                depth: this.normalDepth,
+                bevelEnabled: false
+              };
+
+              const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+              const material = new THREE.MeshBasicMaterial({
+                color: province.userData.color,
+                transparent: true,
+                opacity: 0.6
+              });
+
+              const mesh = new THREE.Mesh(geometry, material);
+              const line = new THREE.Line(lineGeometry, lineMaterial);
+              line.position.z = this.normalDepth;
+              province.add(mesh);
+              // province.add(line);
+            })
+          })
+          map.add(province);
         });
-        dateGroup.add(province);
+        map.position.z = i - originIndex;
+        dateGroup.add(map)
       });
       this.dateGroup = dateGroup;
       this.scene.add(this.dateGroup);
     },
     disposeDateGroup() {
-      if (!this.dateGroup) return
+      if (!this.dateGroup) return;
       for (let i = 0; i < this.dateGroup.children.length; i++) {
-        const province = this.dateGroup.children[i];
-        for (let j = 0; j < province.children.length; j++) {
-          const object = province.children[j];
-          object.geometry.dispose();
-          object.material.dispose();
+        const map = this.dateGroup.children[i];
+        for (let j = 0; j < map.children.length; j++) {
+          const province = map.children[j];
+          for (let k = 0; k < province.children.length; k++) {
+            const object = province.children[k];
+            object.geometry.dispose();
+            object.material.dispose();
+            province.remove(object);
+          }
+          map.remove(province);
         }
+        this.dateGroup.remove(map);
       }
       this.scene.remove(this.dateGroup);
       this.dateGroup = undefined;
-    },
-    onclickreset() {
-      this.stretched = true;
     }
   },
   mounted() {
@@ -437,51 +403,27 @@ export default {
     cancelAnimationFrame(this.animate)
   },
   watch: {
-    selectedProvince(val) {
+    selectedProvince(val, oldVal) {
       console.log(val?.name)
-      const duration = 500;
-      const easingFn = TWEEN.Easing.Quadratic.Out;
-      const cameraTween = new TWEEN.Tween(this.camera.position)
-        .easing(easingFn)
-        .onUpdate(() => {
-          this.controls.update();
-        });
+      // const duration = 500;
+      // const easingFn = TWEEN.Easing.Quadratic.Out;
+      // const cameraTween = new TWEEN.Tween(this.camera.position)
+      //   .easing(easingFn)
+      //   .onUpdate(() => {
+      //     this.controls.update();
+      //   });
       if (val) {
-        // this.map.children.forEach(e => e.visible = false);
-        this.map.children.forEach(province => {
-          if (val.name === province.name) {
-            province.visible = false;
-          } else {
-            province.userData.gray = true;
-          }
-          province.children.forEach(obj => {
-            if (obj instanceof THREE.Mesh) {
-              obj.material.color.set(0xeeeeee);
-            }
-          });
-        });
-        cameraTween.to(new THREE.Vector3(-100, 0, 0), duration);
+        this.map.children.forEach(e => e.visible = false);
+        // cameraTween.to(new THREE.Vector3(-100, 0, 0), duration);
 
         this.createDateGroup();
       } else {
-        // this.map.children.forEach(e => e.visible = true);
-        if (this.stretched) {
-          this.stretched = false;
-        }
-        this.map.children.forEach(province => {
-          province.visible = true;
-          province.userData.gray = false;
-          province.children.forEach(obj => {
-            if (obj instanceof THREE.Mesh) {
-              obj.material.color.set(province.userData.color);
-            }
-          });
-        });
-        cameraTween.to(new THREE.Vector3(0, 0, 100), duration);
+        this.map.children.forEach(e => e.visible = true);
+        // cameraTween.to(new THREE.Vector3(0, 0, 100), duration);
 
         this.disposeDateGroup();
       }
-      cameraTween.start();
+      // cameraTween.start();
     },
     currentDate(val) {
       if (!val) return;
@@ -503,10 +445,10 @@ export default {
       }
     },
     currentPollution(val) {
-      this.updateMapColor(this.map);
-      if (this.dateGroup) {
-        this.updateMapColor(this.dateGroup);
-      }
+      // this.updateMapColor(this.map);
+      // if (this.dateGroup) {
+      //   this.updateMapColor(this.dateGroup);
+      // }
     },
     currentYear(val) {
       const yearObj = this.yearArr.find(e => e.year === val);
@@ -514,34 +456,12 @@ export default {
       this.currentdateList = yearObj.dateList;
       this.currentprovincedate = yearObj.provincedate;
 
-      this.stretched = true;
-
-      let dateIndex = -1;
-      if (this.currentDate) {
-        dateIndex = this.currentdateList.findIndex(e => e.substr(4) === this.currentDate.substr(4));
-      }
-      this.currentDate = this.currentdateList[dateIndex] || this.currentdateList[0];
-    },
-    stretched(val) {
-      let currentDateIndex = this.currentdateList.findIndex(e => e === this.currentDate); 
-
-      this.map.children.forEach(province => {
-        province.visible = true;
-        province.userData.gray = false;
-        province.children.forEach(obj => {
-          if (obj instanceof THREE.Mesh) {
-            obj.scale.z = val ? this.currentdateList.length : 1;
-            obj.position.z = val ? -currentDateIndex * this.normalDepth : 0;
-          } if (obj instanceof THREE.Line) {
-            obj.position.z = val ? (this.currentdateList.length - currentDateIndex) * this.normalDepth : this.normalDepth;
-          }
-        });
-      });
-      this.updateMapColor(this.map);
-
-      if (val) {
-        this.selectedProvince = null;
-      }
+      // let dateIndex = -1;
+      // if (this.currentDate) {
+      //   dateIndex = this.currentdateList.findIndex(e => e.substr(4) === this.currentDate.substr(4));
+      // }
+      // this.currentDate = this.currentdateList[dateIndex] || this.currentdateList[0];
+      this.createDateGroup();
     }
   }
 }
@@ -568,7 +488,7 @@ export default {
   bottom: 10px;
   right: 15px;
   z-index: 2;
-  background-color: black;
+  background: black;
   padding: 6px;
   pointer-events: none;
   font-size: 12px;
@@ -596,12 +516,5 @@ export default {
       height: 14px;
     }
   }
-}
-
-#reset {
-  position: absolute;
-  bottom: 150px;
-  right: 15px;
-  z-index: 2;
 }
 </style>
