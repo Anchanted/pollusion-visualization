@@ -394,6 +394,7 @@ export default {
       this.dateGroup = undefined;
     },
     onclickreset() {
+      this.currentDate = this.currentdateList[0];
       this.stretched = true;
     }
   },
@@ -410,7 +411,7 @@ export default {
     // this.scene.add(new THREE.AxesHelper(100));
 
     // 相机 透视相机
-    this.camera.position.set(0, 0, 150);
+    this.camera.position.set(0, 0, 500);
     this.camera.lookAt(0, 0, 0);
 
     this.initMap();
