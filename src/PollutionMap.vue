@@ -54,7 +54,6 @@ export default {
       },
       controls: null,
       normalDepth: 1,
-      stretchedScale: 10,
       showProvinceInfo: true,
       hoveredProvince: null,
       selectedProvince: null,
@@ -91,6 +90,7 @@ export default {
         "O3": [50, 100, 168, 208, 748],
       },
       blue: "#02A1E2",
+      gray: 0xeeeeee,
       stretched: false
     }
   },
@@ -120,7 +120,7 @@ export default {
       // this.cube.rotation.x += 0.05;
       // this.cube.rotation.y += 0.05;
 
-      // TWEEN.update();
+      TWEEN.update();
 
       this.renderer.render(this.scene, this.camera);
     },
@@ -184,6 +184,8 @@ export default {
 
       this.currentPollution = this.pollutionArr[0];
       this.currentYear = this.yearArr[0].year;
+
+      this.$nextTick(this.onclickreset);
     },
     setLight() {
       this.scene.add(new THREE.AmbientLight(0xffffff)); // 环境光
@@ -238,7 +240,7 @@ export default {
           if (obj instanceof THREE.Mesh) {
             let color;
             if (this.hoveredProvince.userData.gray) {
-              color = 0xeeeeee;
+              color = this.gray;
             } else if (obj.scale.z !== 1) {
               color = this.blue;
             } else {
@@ -318,7 +320,9 @@ export default {
         province.children.forEach(obj => {
           if (obj instanceof THREE.Mesh) {
             let color;
-            if (obj.scale.z !== 1) {
+            if (province.userData.gray) {
+              color = this.gray;
+            }  else if (obj.scale.z !== 1) {
               color = this.blue;
             } else {
               color = province.userData.color;
@@ -331,8 +335,13 @@ export default {
     updateMapPos() {
       let currentDateIndex = this.currentdateList.findIndex(e => e === this.currentDate); 
       this.map.children.forEach(province => {
-        province.visible = true;
-        province.userData.gray = false;
+        if (this.selectedProvince) {
+          province.visible = this.selectedProvince.name !== province.name;
+          province.userData.gray = true;
+        } else {
+          province.visible = true;
+          province.userData.gray = false;
+        }
         province.children.forEach(obj => {
           if (obj instanceof THREE.Mesh) {
             obj.scale.z = this.stretched ? this.currentdateList.length : 1;
@@ -411,8 +420,17 @@ export default {
       this.dateGroup = undefined;
     },
     onclickreset() {
-      this.currentDate = this.currentdateList[0];
-      this.stretched = true;
+      if (this.selectedProvince) {
+        this.selectedProvince = null;
+      }
+
+      this.$nextTick(() => {
+        this.stretched = true;
+        this.currentDate = this.currentdateList[0];
+
+        this.updateMapPos();
+        this.updateMapColor(this.map);
+      });
     }
   },
   mounted() {
@@ -465,41 +483,21 @@ export default {
           this.controls.update();
         });
       if (val) {
-        // this.map.children.forEach(e => e.visible = false);
-        this.map.children.forEach(province => {
-          if (val.name === province.name) {
-            province.visible = false;
-          } else {
-            province.userData.gray = true;
-          }
-          province.children.forEach(obj => {
-            if (obj instanceof THREE.Mesh) {
-              obj.material.color.set(0xeeeeee);
-            }
-          });
-        });
-        cameraTween.to(new THREE.Vector3(-100, 0, 0), duration);
+        cameraTween.to(new THREE.Vector3(-300, 0, 0), duration);
 
         this.createDateGroup();
       } else {
-        // this.map.children.forEach(e => e.visible = true);
         if (this.stretched) {
           this.stretched = false;
         }
-        this.map.children.forEach(province => {
-          province.visible = true;
-          province.userData.gray = false;
-          province.children.forEach(obj => {
-            if (obj instanceof THREE.Mesh) {
-              obj.material.color.set(province.userData.color);
-            }
-          });
-        });
-        cameraTween.to(new THREE.Vector3(0, 0, 100), duration);
+        cameraTween.to(new THREE.Vector3(0, 0, 300), duration);
 
         this.disposeDateGroup();
       }
       cameraTween.start();
+
+      this.updateMapPos();
+      this.updateMapColor(this.map);
     },
     currentDate(val) {
       if (!val) return;
@@ -533,21 +531,11 @@ export default {
       this.currentdateList = yearObj.dateList;
       this.currentprovincedate = yearObj.provincedate;
 
-      this.stretched = true;
-
       let dateIndex = -1;
       if (this.currentDate) {
         dateIndex = this.currentdateList.findIndex(e => e.substr(4) === this.currentDate.substr(4));
       }
       this.currentDate = this.currentdateList[dateIndex] || this.currentdateList[0];
-    },
-    stretched(val) {
-      this.updateMapPos();
-      this.updateMapColor(this.map);
-
-      if (val) {
-        this.selectedProvince = null;
-      }
     }
   }
 }
