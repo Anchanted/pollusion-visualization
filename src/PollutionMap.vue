@@ -12,8 +12,8 @@
     </div>
     <div v-show="currentPollution" id="color-bar">
       <div v-for="(color, index) in levelColorArr" :key="index" class="color-bar-row">
-        <span class="color-area" :style="{ backgroundColor: color }"></span>
         <span class="color-text">{{levelText(index)}}</span>
+        <span class="color-area" :style="{ backgroundColor: color }"></span>
       </div>
     </div>
     <button id="reset" @click="onclickreset">Reset</button>
@@ -45,6 +45,7 @@ export default {
       scene: new THREE.Scene(),
       camera: new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 5000),
       raycaster: new THREE.Raycaster(),
+      gui: null,
       map: new THREE.Object3D(),
       dateGroup: undefined,
       mouse: new THREE.Vector2(),
@@ -99,6 +100,7 @@ export default {
       return index => {
         if (!this.currentPollution) return "";
         const levelList = this.pollutionLevel[this.currentPollution];
+        if (!levelList) return "";
         if (index === 0) {
           return `0 - ${levelList[index]}`
         } else if (index === levelList.length) {
@@ -109,7 +111,10 @@ export default {
       }
     },
     originIndex() {
-      return this.currentdateList ? Math.floor(this.currentdateList.length / 2) : 0
+      if (!this.currentdateList) return 0
+      let currentDateIndex = this.currentdateList.findIndex(e => e === this.currentDate); 
+      // return Math.floor(this.currentdateList.length / 2)
+      return currentDateIndex
     }
   },
   methods: {
@@ -126,7 +131,7 @@ export default {
     },
     initMap() {
       // 墨卡托投影转换
-      const projection = d3.geoMercator().center([104.0, 37.5]).scale(80).translate([0, 0]);
+      const projection = d3.geoMercator().center([104.0, 37.5]).scale(160).translate([0, 0]);
 
       chinajson.features.forEach(geo => {
         // 定一个省份3D对象
@@ -218,6 +223,7 @@ export default {
       pollutionFolder.add({ year: this.currentYear }, 'year')
         .options(this.yearArr.map(e => e.year))
         .onChange(e => this.currentYear = e);
+      this.gui = gui;
     },
     onmousedown(e) {
       this.moveMove = false;
@@ -228,8 +234,8 @@ export default {
       // (-1 to +1) for both components
       this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
       this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-      this.eventOffset.x = e.clientX + 2;
-      this.eventOffset.y = e.clientY + 2;
+      this.eventOffset.x = e.clientX + 15;
+      this.eventOffset.y = e.clientY + 15;
 
       this.raycaster.setFromCamera(this.mouse, this.camera);
 
@@ -333,7 +339,7 @@ export default {
       });
     },
     updateMapPos() {
-      let currentDateIndex = this.currentdateList.findIndex(e => e === this.currentDate); 
+      // let currentDateIndex = this.currentdateList.findIndex(e => e === this.currentDate); 
       this.map.children.forEach(province => {
         if (this.selectedProvince) {
           province.visible = this.selectedProvince.name !== province.name;
@@ -343,11 +349,17 @@ export default {
           province.userData.gray = false;
         }
         province.children.forEach(obj => {
+          // if (obj instanceof THREE.Mesh) {
+          //   obj.scale.z = this.stretched ? this.currentdateList.length : 1;
+          //   obj.position.z = this.stretched ? (0 - this.originIndex) * this.normalDepth : (currentDateIndex - this.originIndex) * this.normalDepth;
+          // } else if (obj instanceof THREE.Line) {
+          //   obj.position.z = this.stretched ? (this.currentdateList.length - this.originIndex) * this.normalDepth : (currentDateIndex - this.originIndex + 1) * this.normalDepth;
+          // }
           if (obj instanceof THREE.Mesh) {
             obj.scale.z = this.stretched ? this.currentdateList.length : 1;
-            obj.position.z = this.stretched ? (0 - this.originIndex) * this.normalDepth : (currentDateIndex - this.originIndex) * this.normalDepth;
+            obj.position.z = this.stretched ? (0 - this.originIndex) * this.normalDepth : 0;
           } else if (obj instanceof THREE.Line) {
-            obj.position.z = this.stretched ? (this.currentdateList.length - this.originIndex) * this.normalDepth : (currentDateIndex - this.originIndex + 1) * this.normalDepth;
+            obj.position.z = this.stretched ? (this.currentdateList.length - this.originIndex) * this.normalDepth : this.normalDepth;
           }
         });
       });
@@ -425,7 +437,7 @@ export default {
       }
 
       this.$nextTick(() => {
-        this.stretched = true;
+        this.stretched = false;
         this.currentDate = this.currentdateList[0];
 
         this.updateMapPos();
@@ -443,7 +455,7 @@ export default {
     // this.container.appendChild(this.renderer.domElement);
 
     // 场景
-    this.scene.add(new THREE.AxesHelper(100));
+    // this.scene.add(new THREE.AxesHelper(100));
 
     // 相机 透视相机
     this.camera.position.set(0, 0, 300);
@@ -461,8 +473,8 @@ export default {
 
     this.animate();
 
-    console.log(this.renderer.info)
-    console.log(this.scene)
+    // console.log(this.renderer.info)
+    // console.log(this.scene)
   },
   beforeDestroy() {
     this.scene.remove();
@@ -470,11 +482,12 @@ export default {
     this.renderer.forceContextLoss();
     this.renderer.content = null;
     this.renderer.domElement = null;
+    this.gui && this.gui.destroy();
     cancelAnimationFrame(this.animate)
   },
   watch: {
     selectedProvince(val) {
-      console.log(val?.name)
+      // console.log(val?.name)
       const duration = 500;
       const easingFn = TWEEN.Easing.Quadratic.Out;
       const cameraTween = new TWEEN.Tween(this.camera.position)
@@ -582,12 +595,12 @@ export default {
 
     .color-text {
       color: #ffffff;
-      margin-right: 10px;
     }
 
     .color-area {
       width: 30px;
       height: 14px;
+      margin-right: 10px;
     }
   }
 }
